@@ -515,6 +515,29 @@ def start_comfyui(asyncio_loop=None):
     cuda_malloc_warning()
     setup_database()
 
+    if args.enable_auth:
+        from app.auth.config import AuthConfig
+        from app.auth.security import hash_password
+        from app.auth.models import User
+        from app.database.db import create_session as db_session
+
+        config = AuthConfig.from_args()
+        hashed = hash_password(args.auth_password)
+        config.password_hash = hashed
+
+        with db_session() as db:
+            existing = db.query(User).filter(User.username == config.username).first()
+            if existing:
+                if existing.password_hash != hashed:
+                    existing.password_hash = hashed
+                    db.commit()
+            else:
+                user = User(username=config.username, password_hash=hashed)
+                db.add(user)
+                db.commit()
+
+        args.auth_password = None
+
     prompt_server.add_routes()
     hijack_progress(prompt_server)
 

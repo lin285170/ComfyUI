@@ -243,6 +243,22 @@ parser.add_argument("--enable-assets", action="store_true", help="Enable the ass
 parser.add_argument("--feature-flag", type=str, action='append', default=[], metavar="KEY[=VALUE]", help="Set a server feature flag. Use KEY=VALUE to set an explicit value, or bare KEY to set it to true. Can be specified multiple times. Boolean values (true/false) and numbers are auto-converted. Examples: --feature-flag show_signin_button=true  or  --feature-flag show_signin_button")
 parser.add_argument("--list-feature-flags", action="store_true", help="Print the registry of known CLI-settable feature flags as JSON and exit.")
 
+# Authentication
+parser.add_argument("--enable-auth", action="store_true",
+    help="Enable username/password authentication with CAPTCHA and brute-force protection.")
+parser.add_argument("--auth-username", type=str, default=None,
+    help="Admin username (required when --enable-auth is set).")
+parser.add_argument("--auth-password", type=str, default=None,
+    help="Admin password. Can also be set via the COMFYUI_AUTH_PASSWORD environment variable.")
+parser.add_argument("--auth-max-failed-attempts", type=int, default=5,
+    help="Maximum failed login attempts before account lockout (default: 5).")
+parser.add_argument("--auth-lockout-minutes", type=int, default=15,
+    help="Account lockout duration in minutes (default: 15).")
+parser.add_argument("--auth-session-timeout-hours", type=int, default=24,
+    help="Session timeout in hours (default: 24).")
+parser.add_argument("--auth-rate-limit-count", type=int, default=10,
+    help="Max login attempts per IP per minute before rate limiting (default: 10).")
+
 if comfy.options.args_parsing:
     args = parser.parse_args()
 else:
@@ -262,6 +278,15 @@ if args.disable_auto_launch:
 
 if args.force_fp16:
     args.fp16_unet = True
+
+# Validate auth arguments
+if args.enable_auth:
+    if not args.auth_username:
+        parser.error("--auth-username is required when --enable-auth is set")
+    if not args.auth_password:
+        args.auth_password = os.environ.get("COMFYUI_AUTH_PASSWORD")
+    if not args.auth_password:
+        parser.error("--auth-password or COMFYUI_AUTH_PASSWORD environment variable is required when --enable-auth is set")
 
 # '--enable-manager-legacy-ui' is meaningless unless the manager is enabled, so imply '--enable-manager'.
 if args.enable_manager_legacy_ui:

@@ -227,6 +227,11 @@ class PromptServer():
         self.number = 0
 
         middlewares = [cache_control, deprecation_warning]
+        if args.enable_auth:
+            from middleware.auth_middleware import create_auth_middleware
+            from app.auth.config import AuthConfig
+            self.auth_config = AuthConfig.from_args()
+            middlewares.append(create_auth_middleware(self.auth_config))
         if args.enable_compress_response_body:
             middlewares.append(compress_body)
 
@@ -277,7 +282,7 @@ class PromptServer():
             # Store WebSocket for backward compatibility
             self.sockets[sid] = ws
             # Store metadata separately
-            self.sockets_metadata[sid] = {"feature_flags": {}}
+            self.sockets_metadata[sid] = {"feature_flags": {}, "auth_user_id": request.get("auth_user_id")}
 
             try:
                 # Send initial state to the new client
@@ -1241,6 +1246,10 @@ class PromptServer():
             self.app.add_routes([
                 web.static('/docs', embedded_docs_path)
             ])
+
+        if args.enable_auth:
+            from app.auth.routes import AuthRoutes
+            AuthRoutes(self.auth_config).register(self.app)
 
         self.app.add_routes([
             web.static('/', self.web_root),
