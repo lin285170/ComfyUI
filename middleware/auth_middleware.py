@@ -49,7 +49,12 @@ LOGOUT_BUTTON_HTML = (
 
 def _inject_logout_button(response: web.StreamResponse) -> web.StreamResponse:
     content_type = response.content_type or ""
-    if "text/html" not in content_type:
+    is_html = "text/html" in content_type
+
+    if isinstance(response, web.FileResponse):
+        is_html = str(response._path).lower().endswith((".html", ".htm"))
+
+    if not is_html:
         return response
 
     body = None
@@ -68,7 +73,7 @@ def _inject_logout_button(response: web.StreamResponse) -> web.StreamResponse:
     body_str = body.decode("utf-8", errors="replace")
     if "</body>" in body_str:
         body_str = body_str.replace("</body>", LOGOUT_BUTTON_HTML + "</body>")
-        new_response = web.Response(body=body_str.encode("utf-8"), content_type=content_type)
+        new_response = web.Response(body=body_str.encode("utf-8"), content_type="text/html")
         for key, value in response.headers.items():
             if key.lower() not in ("content-length", "content-type"):
                 new_response.headers[key] = value
