@@ -36,6 +36,8 @@ class AuthRoutes:
         app.router.add_post("/api/auth/login", self._login)
         app.router.add_post("/auth/logout", self._logout)
         app.router.add_post("/api/auth/logout", self._logout)
+        app.router.add_get("/auth/logout", self._logout_page)
+        app.router.add_get("/api/auth/logout", self._logout_page)
         app.router.add_get("/auth/captcha", self._captcha_image)
         app.router.add_get("/api/auth/captcha", self._captcha_image)
         app.router.add_get("/auth/status", self._auth_status)
@@ -101,6 +103,12 @@ class AuthRoutes:
     async def _logout(self, request: web.Request) -> web.Response:
         delete_session(request)
         response = web.json_response({"success": True})
+        clear_session_cookie(response)
+        return response
+
+    async def _logout_page(self, request: web.Request) -> web.Response:
+        delete_session(request)
+        response = web.HTTPFound("/login")
         clear_session_cookie(response)
         return response
 
