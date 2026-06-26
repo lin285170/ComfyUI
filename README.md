@@ -417,6 +417,86 @@ Use `--tls-keyfile key.pem --tls-certfile cert.pem` to enable TLS/SSL, the app w
 > Note: Windows users can use [alexisrolland/docker-openssl](https://github.com/alexisrolland/docker-openssl) or one of the [3rd party binary distributions](https://wiki.openssl.org/index.php/Binaries) to run the command example above.
 <br/><br/>If you use a container, note that the volume mount `-v` can be a relative path so `... -v ".\:/openssl-certs" ...` would create the key & cert files in the current directory of your command prompt or powershell terminal.
 
+## Authentication
+
+ComfyUI supports optional username/password authentication with CAPTCHA verification and brute-force protection. This is useful when exposing ComfyUI on a network or the internet.
+
+### Quick Start
+
+```bash
+python main.py --enable-auth --auth-username admin --auth-password mypassword
+```
+
+The password can also be set via the `COMFYUI_AUTH_PASSWORD` environment variable:
+
+```bash
+export COMFYUI_AUTH_PASSWORD=mypassword
+python main.py --enable-auth --auth-username admin
+```
+
+### How It Works
+
+1. When authentication is enabled, all HTTP requests and WebSocket connections are protected by an auth middleware
+2. Unauthenticated users are redirected to a standalone login page at `/login`
+3. The login page requires username, password, and a visual CAPTCHA code
+4. On successful login, a secure HTTP-only session cookie is set
+5. API requests without a valid session return `401 Unauthorized`
+
+### Security Features
+
+| Feature | Implementation |
+|---------|---------------|
+| **Password Storage** | bcrypt with 12 rounds |
+| **Session Token** | 128-character hex string via `secrets.token_hex(64)` |
+| **Cookie Security** | HttpOnly, SameSite=Strict, Secure (when HTTPS) |
+| **CAPTCHA** | 6-character image (Pillow), excludes ambiguous chars (0/O/1/I), noise lines, dot distortion, character rotation, 5-minute expiry, one-time use |
+| **IP Rate Limiting** | In-memory per-IP tracking, blocks after exceeding threshold within a rolling window |
+| **Account Lockout** | Database-backed, locks account after N consecutive failed attempts for M minutes |
+| **CSRF Protection** | Double-submit cookie pattern on login form |
+
+### Configuration
+
+| CLI Flag | Default | Description |
+|----------|---------|-------------|
+| `--enable-auth` | disabled | Enable authentication |
+| `--auth-username` | — | Admin username (required) |
+| `--auth-password` | — | Admin password (or `COMFYUI_AUTH_PASSWORD` env var) |
+| `--auth-max-failed-attempts` | `5` | Failed attempts before account lockout |
+| `--auth-lockout-minutes` | `15` | Account lockout duration in minutes |
+| `--auth-session-timeout-hours` | `24` | Session expiration time in hours |
+| `--auth-rate-limit-count` | `10` | Max login attempts per IP per minute |
+
+### Database
+
+Authentication data is stored in the same SQLite database used by ComfyUI (default: `user/comfyui.db`). Three tables are created:
+
+- `auth_users` — user credentials and lockout status
+- `auth_sessions` — active session tokens with expiry
+- `auth_failed_attempts` — failed login records for rate limiting and lockout
+
+### Recommended for Production
+
+When exposing ComfyUI to a network, combine authentication with TLS:
+
+```bash
+python main.py \
+  --enable-auth \
+  --auth-username admin \
+  --auth-password mypassword \
+  --tls-keyfile key.pem \
+  --tls-certfile cert.pem \
+  --listen 0.0.0.0
+```
+
+### Exempt Paths
+
+The following paths are not protected by authentication:
+
+- `/login` — login page
+- `/auth/login`, `/auth/logout`, `/auth/captcha`, `/auth/status` — auth API endpoints
+- `/extensions/`, `/templates/`, `/docs/` — static extension/template/doc resources
+- Static assets (`.js`, `.css`, `.png`, `.jpg`, `.svg`, `.ico`, `.woff`, `.ttf`, etc.) — frontend resources
+
 ## Support and dev channel
 
 [Discord](https://comfy.org/discord): Try the #help or #feedback channels.
